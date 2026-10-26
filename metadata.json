@@ -1,0 +1,6 @@
+{
+  "name": "Vortex2D - WebGPU ImGui Game Engine & Editor",
+  "description": "A powerful, intuitive 2D game engine and editor featuring immediate-mode ImGui on WebGPU with real-time scene hierarchy, transform operations, sprite pipelines, and behavioral components.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
