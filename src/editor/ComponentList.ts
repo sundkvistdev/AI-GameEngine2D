@@ -28,7 +28,7 @@ import type {
   ParticleEmitter2DComponent,
   ComponentGalleryItem,
 } from '../engine/types.ts';
-import { playSynthBeep } from '../engine/audio.ts';
+import { logInfo, logError } from '../engine/logger.ts';
 import { compileScript } from '../engine/math.ts';
 import { SAMPLE_UI_SCHEMAS, renderUIMarkup, type UIElementNode } from '../ui/UIMarkup.ts';
 
@@ -280,7 +280,6 @@ export function renderComponentList(
         const tmp = components[i];
         components[i] = components[i - 1];
         components[i - 1] = tmp;
-        playSynthBeep(520, 0.03);
       }
     }
     ImGui.EndDisabled();
@@ -294,7 +293,6 @@ export function renderComponentList(
         const tmp = components[i];
         components[i] = components[i + 1];
         components[i + 1] = tmp;
-        playSynthBeep(520, 0.03);
       }
     }
     ImGui.EndDisabled();
@@ -304,7 +302,7 @@ export function renderComponentList(
     if (ImGui.SmallButton('Remove')) {
       components.splice(i, 1);
       state.logs.unshift(`Removed '${comp.type}' component from '${node.name}'`);
-      playSynthBeep(320, 0.05);
+      logInfo(`Removed '${comp.type}' component from '${node.name}'`, 'Hierarchy');
       ImGui.PopID();
       break;
     }
@@ -353,7 +351,6 @@ export function renderComponentList(
   ImGui.Spacing();
   if (ImGui.Button('+ Add Component...', new ImVec2(-1, 26))) {
     onOpenGallery();
-    playSynthBeep(640, 0.04);
   }
 }
 
@@ -367,7 +364,7 @@ function getComponentCategory(type: string): string {
  */
 function renderTransformInspector(comp: TransformComponent, state: EditorState): void {
   const posTuple: [number, number] = [comp.x, comp.y];
-  if (ImGui.DragFloat2('Position', posTuple, 1.0, 0, 0, '%.2f')) {
+  if (ImGui.DragFloat2('Position (+X right, +Y up)', posTuple, 1.0, 0, 0, '%.2f')) {
     comp.x = posTuple[0];
     comp.y = posTuple[1];
   }
@@ -378,19 +375,19 @@ function renderTransformInspector(comp: TransformComponent, state: EditorState):
   }
 
   const rotTuple: [number] = [comp.rotationDeg];
-  if (ImGui.DragFloat('Rotation Deg', rotTuple, 1.0, 0, 0, '%.2f deg')) {
+  if (ImGui.DragFloat('Rotation (deg)', rotTuple, 1.0, 0, 0, '%.2f deg')) {
     comp.rotationDeg = rotTuple[0];
   }
 
-  ImGui.TextDisabled('Preset:');
+  ImGui.TextDisabled('0 = right (upright sprite), counterclockwise (+):');
   ImGui.SameLine();
-  if (ImGui.SmallButton('0 (Up)')) comp.rotationDeg = 0;
+  if (ImGui.SmallButton('0 deg (Right)')) comp.rotationDeg = 0;
   ImGui.SameLine();
-  if (ImGui.SmallButton('90 (Right)')) comp.rotationDeg = 90;
+  if (ImGui.SmallButton('90 deg (Up)')) comp.rotationDeg = 90;
   ImGui.SameLine();
-  if (ImGui.SmallButton('180 (Down)')) comp.rotationDeg = 180;
+  if (ImGui.SmallButton('180 deg (Left)')) comp.rotationDeg = 180;
   ImGui.SameLine();
-  if (ImGui.SmallButton('270 (Left)')) comp.rotationDeg = 270;
+  if (ImGui.SmallButton('270 deg (Down)')) comp.rotationDeg = 270;
 
   const scaleTuple: [number, number] = [comp.scaleX, comp.scaleY];
   if (ImGui.DragFloat2('Scale', scaleTuple, 0.05, 0, 0, '%.3f')) {
@@ -512,7 +509,6 @@ function renderTransformInspector(comp: TransformComponent, state: EditorState):
         scaleY: 1,
         uniformScale: true,
       });
-      playSynthBeep(560, 0.03);
     }
     ImGui.SameLine();
     if (ImGui.SmallButton('+ Rotate')) {
@@ -529,7 +525,6 @@ function renderTransformInspector(comp: TransformComponent, state: EditorState):
         scaleY: 1,
         uniformScale: true,
       });
-      playSynthBeep(560, 0.03);
     }
     ImGui.SameLine();
     if (ImGui.SmallButton('+ Scale')) {
@@ -546,7 +541,6 @@ function renderTransformInspector(comp: TransformComponent, state: EditorState):
         scaleY: 1.5,
         uniformScale: true,
       });
-      playSynthBeep(560, 0.03);
     }
 
     ImGui.TreePop();
@@ -571,7 +565,6 @@ function renderScriptInspector(comp: ScriptComponent, state: EditorState): void 
         const res = compileScript(comp.sourceCode);
         if (res.fn) comp.compiledFn = res.fn;
         if (res.error) comp.lastError = res.error;
-        playSynthBeep(640, 0.03);
       }
     }
     ImGui.EndCombo();
@@ -590,12 +583,12 @@ function renderScriptInspector(comp: ScriptComponent, state: EditorState): void 
       comp.compiledFn = res.fn;
       comp.lastError = null;
       state.logs.unshift(`Script '${comp.name}' compiled successfully`);
-      playSynthBeep(680, 0.04);
+      logInfo(`Script '${comp.name}' compiled successfully`, 'Script');
     } else {
       comp.compiledFn = undefined;
       comp.lastError = res.error || 'Unknown syntax error';
       state.logs.unshift(`Script compile error in '${comp.name}': ${comp.lastError}`);
-      playSynthBeep(320, 0.06);
+      logError(`Script compile error in '${comp.name}': ${comp.lastError}`, 'Script');
     }
   }
 
@@ -628,7 +621,6 @@ function renderUIComponentInspector(comp: UIComponent, state: EditorState): void
         } catch {
           comp.parsedNode = null;
         }
-        playSynthBeep(620, 0.03);
       }
     }
     ImGui.EndCombo();
@@ -645,11 +637,11 @@ function renderUIComponentInspector(comp: UIComponent, state: EditorState): void
     try {
       comp.parsedNode = JSON.parse(comp.markupJson);
       state.logs.unshift(`JSON UI '${comp.name}' parsed successfully`);
-      playSynthBeep(660, 0.04);
+      logInfo(`JSON UI '${comp.name}' parsed successfully`, 'UI');
     } catch (err: any) {
       comp.parsedNode = null;
       state.logs.unshift(`JSON UI parse error in '${comp.name}': ${err.message}`);
-      playSynthBeep(320, 0.06);
+      logError(`JSON UI parse error in '${comp.name}': ${err.message}`, 'UI');
     }
   }
 
@@ -666,7 +658,7 @@ function renderUIComponentInspector(comp: UIComponent, state: EditorState): void
       stateValues: {},
       dispatchAction: (actionId) => {
         state.logs.unshift(`UI Action triggered: ${actionId}`);
-        playSynthBeep(700, 0.04);
+        logInfo(`UI Action triggered: ${actionId}`, 'UI');
       },
     });
     ImGui.TreePop();
@@ -687,7 +679,6 @@ function renderSpriteRendererInspector(
       const isSelected = comp.spriteId === sid;
       if (ImGui.Selectable(sid, isSelected)) {
         comp.spriteId = sid;
-        playSynthBeep(600, 0.03);
       }
       if (isSelected) ImGui.SetItemDefaultFocus();
     }
@@ -701,13 +692,33 @@ function renderSpriteRendererInspector(
   }
 
   const pivotTuple: [number, number] = [comp.pivotX, comp.pivotY];
-  if (ImGui.SliderFloat2('Pivot', pivotTuple, 0.0, 1.0, '%.2f')) {
+  if (ImGui.SliderFloat2('Pivot (0..1)', pivotTuple, 0.0, 1.0, '%.2f')) {
     comp.pivotX = pivotTuple[0];
     comp.pivotY = pivotTuple[1];
   }
-  ImGui.SameLine();
-  if (ImGui.SmallButton('Center (0.5)')) {
+  ImGui.TextDisabled('Pivot: (0.5, 0.5) center | X: 0 left, 1 right | Y: 0 down, 1 up');
+  if (ImGui.SmallButton('Center (0.5, 0.5)')) {
     comp.pivotX = 0.5;
+    comp.pivotY = 0.5;
+  }
+  ImGui.SameLine();
+  if (ImGui.SmallButton('Bottom (0.5, 0)')) {
+    comp.pivotX = 0.5;
+    comp.pivotY = 0.0;
+  }
+  ImGui.SameLine();
+  if (ImGui.SmallButton('Top (0.5, 1)')) {
+    comp.pivotX = 0.5;
+    comp.pivotY = 1.0;
+  }
+  ImGui.SameLine();
+  if (ImGui.SmallButton('Left (0, 0.5)')) {
+    comp.pivotX = 0.0;
+    comp.pivotY = 0.5;
+  }
+  ImGui.SameLine();
+  if (ImGui.SmallButton('Right (1, 0.5)')) {
+    comp.pivotX = 1.0;
     comp.pivotY = 0.5;
   }
 

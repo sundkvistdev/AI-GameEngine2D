@@ -11,7 +11,6 @@ import {
   ImVec2,
   ImVec4,
 } from '@mori2003/jsimgui';
-import { playSynthBeep } from '../engine/audio.ts';
 
 export type UIElementType =
   | 'container'
@@ -239,7 +238,6 @@ export function renderUIMarkup(
       const btnLabel = node.label || 'Button';
       const w = node.width ? node.width : 0;
       if (ImGui.Button(btnLabel, new ImVec2(w, node.height || 22))) {
-        playSynthBeep(640, 0.03);
         if (node.actionId) {
           context.dispatchAction(node.actionId, node);
         }

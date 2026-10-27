@@ -279,7 +279,7 @@ export interface EditorState {
   galleryFilterText: string;
   activeAssetId: string | null;
   activeAssetTab: 'all' | 'images' | 'audio' | 'scripts' | 'prefabs' | 'ui';
-  activeBottomTab: 'assets' | 'console' | 'uidesigner';
+  activeBottomTab: 'assets' | 'console' | 'uidesigner' | 'log';
   logs: string[];
   fps: number;
   frameTimeMs: number;

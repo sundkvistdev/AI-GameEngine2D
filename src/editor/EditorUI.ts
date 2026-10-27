@@ -33,7 +33,14 @@ import {
   createDefaultTransformComponent,
 } from '../engine/math.ts';
 import { createEmptyScene } from '../engine/presets.ts';
-import { playSynthBeep } from '../engine/audio.ts';
+import {
+  engineLogEntries,
+  logInfo,
+  logWarn,
+  logError,
+  clearEngineLogs,
+  consumeUnreadLogFlag,
+} from '../engine/logger.ts';
 import { renderComponentList, COMPONENT_GALLERY_ITEMS } from './ComponentList.ts';
 import {
   initializeDefaultAssets,
@@ -81,6 +88,11 @@ const searchFilter: [string] = [''];
 const importJsonBuffer: [string] = [''];
 const gallerySearchBuffer: [string] = [''];
 let selectedGalleryIndex = 0;
+
+// Log Tab State
+const logFilterBuffer: [string] = [''];
+let activeLogLevelFilter: 'ALL' | 'INFO' | 'WARN' | 'ERROR' = 'ALL';
+const logAutoScroll: [boolean] = [true];
 
 // In-Engine JSON UI Designer buffer
 const designerJsonBuffer: [string] = [SAMPLE_UI_SCHEMAS['Game HUD']];
@@ -198,16 +210,23 @@ function handleDockSplitters(
   const mouseX = io.MousePos.x;
   const mouseY = io.MousePos.y;
   const isMouseDown = ImGui.IsMouseDown(ImGuiMouseButton.Left);
+  const isMouseClicked = ImGui.IsMouseClicked(ImGuiMouseButton.Left);
+  const isItemActive = ImGui.IsAnyItemActive();
+  const isItemHovered = ImGui.IsAnyItemHovered();
   const layout = state.dockLayout;
 
-  const splitterThickness = 5;
+  const splitterThickness = 4;
 
   // Left Splitter
-  if (layout.showLeft) {
+  if (layout.showLeft && !isDraggingRightSplitter && !isDraggingBottomSplitter) {
     const splitX = layout.leftWidth;
     const isHover = Math.abs(mouseX - splitX) <= splitterThickness && mouseY >= topY;
-    if (isHover && isMouseDown && !isDraggingRightSplitter && !isDraggingBottomSplitter) {
-      isDraggingLeftSplitter = true;
+    if (isHover && !isDraggingLeftSplitter && !isItemActive && !isItemHovered) {
+      // Splitter can only initiate on a fresh mouse click directly on the splitter bar
+      // when no slider, input, or other widget is active!
+      if (isMouseClicked) {
+        isDraggingLeftSplitter = true;
+      }
     }
   }
 
@@ -220,11 +239,13 @@ function handleDockSplitters(
   }
 
   // Right Splitter
-  if (layout.showRight) {
+  if (layout.showRight && !isDraggingLeftSplitter && !isDraggingBottomSplitter) {
     const splitX = canvasW - layout.rightWidth;
     const isHover = Math.abs(mouseX - splitX) <= splitterThickness && mouseY >= topY;
-    if (isHover && isMouseDown && !isDraggingLeftSplitter && !isDraggingBottomSplitter) {
-      isDraggingRightSplitter = true;
+    if (isHover && !isDraggingRightSplitter && !isItemActive && !isItemHovered) {
+      if (isMouseClicked) {
+        isDraggingRightSplitter = true;
+      }
     }
   }
 
@@ -237,13 +258,15 @@ function handleDockSplitters(
   }
 
   // Bottom Splitter
-  if (layout.showBottom) {
+  if (layout.showBottom && !isDraggingLeftSplitter && !isDraggingRightSplitter) {
     const splitY = canvasH - layout.bottomHeight;
     const leftBound = layout.showLeft ? layout.leftWidth : 0;
     const rightBound = canvasW - (layout.showRight ? layout.rightWidth : 0);
     const isHover = Math.abs(mouseY - splitY) <= splitterThickness && mouseX >= leftBound && mouseX <= rightBound;
-    if (isHover && isMouseDown && !isDraggingLeftSplitter && !isDraggingRightSplitter) {
-      isDraggingBottomSplitter = true;
+    if (isHover && !isDraggingBottomSplitter && !isItemActive && !isItemHovered) {
+      if (isMouseClicked) {
+        isDraggingBottomSplitter = true;
+      }
     }
   }
 
@@ -272,14 +295,14 @@ function drawMainMenuBar(
       if (ImGui.MenuItem('New Blank Scene', 'Ctrl+N')) {
         onResetScene(createEmptyScene(), 'Blank Scene');
         state.logs.unshift('Created new blank scene with <root>');
-        playSynthBeep(520, 0.05);
+        logInfo('Created new blank scene with <root>', 'Scene');
       }
       ImGui.Separator();
 
       if (ImGui.MenuItem('Save Scene to File (.vortex.json)')) {
         exportSceneToFile(nodes, state.activePresetName || 'Scene');
         state.logs.unshift('Exported scene to .vortex.json');
-        playSynthBeep(700, 0.04);
+        logInfo('Exported scene to .vortex.json', 'Scene');
       }
 
       if (ImGui.MenuItem('Open Scene from File...')) {
@@ -300,11 +323,12 @@ function drawMainMenuBar(
         try {
           navigator.clipboard.writeText(jsonStr);
           state.logs.unshift('Scene JSON copied to clipboard');
+          logInfo('Scene JSON copied to clipboard', 'Scene');
         } catch {
           console.log('Scene JSON:', jsonStr);
           state.logs.unshift('Scene JSON printed to browser console');
+          logInfo('Scene JSON printed to browser console', 'Scene');
         }
-        playSynthBeep(780, 0.06);
       }
       ImGui.EndMenu();
     }
@@ -330,7 +354,7 @@ function drawMainMenuBar(
           selected.children.push(newId);
           state.selectedNodeId = newId;
           state.logs.unshift(`Created child entity '${newNode.name}'`);
-          playSynthBeep(580, 0.04);
+          logInfo(`Created child entity '${newNode.name}'`, 'Hierarchy');
         }
       }
 
@@ -352,7 +376,7 @@ function drawMainMenuBar(
           if (parent) parent.children.push(newId);
           state.selectedNodeId = newId;
           state.logs.unshift(`Duplicated '${selected.name}'`);
-          playSynthBeep(620, 0.05);
+          logInfo(`Duplicated '${selected.name}'`, 'Hierarchy');
         }
       }
 
@@ -432,13 +456,13 @@ function drawToolbar(
       if (ImGui.Button('Pause')) {
         state.isPlaying = false;
         state.logs.unshift('Simulation paused');
-        playSynthBeep(420, 0.04);
+        logInfo('Simulation paused', 'Engine');
       }
     } else {
       if (ImGui.Button('Play')) {
         state.isPlaying = true;
         state.logs.unshift('Simulation running');
-        playSynthBeep(680, 0.04);
+        logInfo('Simulation running', 'Engine');
       }
     }
 
@@ -447,7 +471,7 @@ function drawToolbar(
     if (ImGui.Button('Step')) {
       state.simulationTime += 1 / 60;
       state.logs.unshift(`Stepped frame (+16.6ms)`);
-      playSynthBeep(520, 0.03);
+      logInfo('Stepped frame (+16.6ms)', 'Engine');
     }
     ImGui.EndDisabled();
 
@@ -455,7 +479,7 @@ function drawToolbar(
     if (ImGui.Button('Reset Time')) {
       state.simulationTime = 0;
       state.logs.unshift('Simulation time reset to 0.0s');
-      playSynthBeep(440, 0.03);
+      logInfo('Simulation time reset to 0.0s', 'Engine');
     }
 
     ImGui.SameLine();
@@ -519,14 +543,14 @@ function drawToolbar(
       parentNode.children.push(newId);
       state.selectedNodeId = newId;
       state.logs.unshift(`Created entity '${newNode.name}'`);
-      playSynthBeep(600, 0.04);
+      logInfo(`Created entity '${newNode.name}'`, 'Hierarchy');
     }
 
     ImGui.SameLine();
     if (ImGui.Button('Blank Scene')) {
       onResetScene(createEmptyScene(), 'Blank Scene');
       state.logs.unshift('Scene reset to blank');
-      playSynthBeep(480, 0.04);
+      logInfo('Scene reset to blank', 'Scene');
     }
 
     ImGui.End();
@@ -581,7 +605,6 @@ function drawHierarchyWindow(
 
       if (ImGui.IsItemClicked() && !ImGui.IsItemToggledOpen()) {
         state.selectedNodeId = node.id;
-        playSynthBeep(700, 0.02);
       }
 
       if (ImGui.BeginPopupContextItem(`ctx_${node.id}`)) {
@@ -662,7 +685,7 @@ function drawHierarchyWindow(
       nodes.set(newId, newNode);
       parentNode.children.push(newId);
       state.selectedNodeId = newId;
-      playSynthBeep(600, 0.03);
+      logInfo(`Created entity '${newNode.name}'`, 'Hierarchy');
     }
 
     ImGui.SameLine();
@@ -687,7 +710,7 @@ function drawHierarchyWindow(
           if (parent) parent.children.push(newId);
           state.selectedNodeId = newId;
           state.logs.unshift(`Duplicated '${cur.name}'`);
-          playSynthBeep(640, 0.04);
+          logInfo(`Duplicated '${cur.name}'`, 'Hierarchy');
         }
       }
     }
@@ -790,22 +813,9 @@ function drawBottomDockWindow(
         ImGui.EndTabItem();
       }
 
-      // TAB 3: ENGINE CONSOLE & LOGS
-      if (ImGui.BeginTabItem('Console & Logs')) {
-        if (ImGui.Button('Clear Logs')) {
-          state.logs = ['Console cleared'];
-          playSynthBeep(440, 0.02);
-        }
-        ImGui.SameLine();
-        ImGui.TextDisabled(`Total entries: ${state.logs.length}`);
-
-        ImGui.Separator();
-        ImGui.BeginChild('##LogScroll', new ImVec2(0, 95), ImGuiChildFlags.None);
-        for (let i = 0; i < state.logs.length; i++) {
-          ImGui.Text(`[${i + 1}] ${state.logs[i]}`);
-        }
-        ImGui.EndChild();
-
+      // TAB 3: ENGINE LOG (Named "Log" and actually acting as a usable log)
+      if (ImGui.BeginTabItem('Log')) {
+        renderRealLogTab(state);
         ImGui.EndTabItem();
       }
 
@@ -814,6 +824,103 @@ function drawBottomDockWindow(
 
     ImGui.End();
   }
+}
+
+/**
+ * Robust, usable Engine Log Tab
+ * Features: Level filtering (ALL, INFO, WARN, ERROR), search query, clear,
+ * copy to clipboard, auto-scroll, formatted timestamps, and level colors.
+ */
+function renderRealLogTab(state: EditorState) {
+  // Top control bar
+  if (ImGui.Button('Clear')) {
+    clearEngineLogs();
+    state.logs = ['Log buffer cleared'];
+  }
+  ImGui.SameLine();
+
+  if (ImGui.Button('Copy All')) {
+    const allText = engineLogEntries
+      .map((e) => `[${e.timestamp}] [${e.level.toUpperCase()}] [${e.category}] ${e.message}`)
+      .join('\n');
+    try {
+      navigator.clipboard.writeText(allText);
+      logInfo('Copied all logs to clipboard', 'System');
+    } catch {
+      console.log('Engine Logs:\n' + allText);
+    }
+  }
+  ImGui.SameLine();
+
+  // Search input
+  ImGui.SetNextItemWidth(150);
+  ImGui.InputTextWithHint('##log_search', 'Search logs...', logFilterBuffer, 64);
+  ImGui.SameLine();
+
+  // Level counts & buttons
+  const infoCount = engineLogEntries.filter((e) => e.level === 'info').length;
+  const warnCount = engineLogEntries.filter((e) => e.level === 'warn').length;
+  const errorCount = engineLogEntries.filter((e) => e.level === 'error').length;
+
+  if (ImGui.SmallButton(`All (${engineLogEntries.length})`)) activeLogLevelFilter = 'ALL';
+  ImGui.SameLine();
+  if (ImGui.SmallButton(`Info (${infoCount})`)) activeLogLevelFilter = 'INFO';
+  ImGui.SameLine();
+  if (ImGui.SmallButton(`Warn (${warnCount})`)) activeLogLevelFilter = 'WARN';
+  ImGui.SameLine();
+  if (ImGui.SmallButton(`Error (${errorCount})`)) activeLogLevelFilter = 'ERROR';
+  ImGui.SameLine();
+
+  ImGui.Checkbox('Auto-scroll', logAutoScroll);
+
+  ImGui.Separator();
+
+  // Filter entries
+  const query = logFilterBuffer[0].trim().toLowerCase();
+  const filtered = engineLogEntries.filter((e) => {
+    if (activeLogLevelFilter !== 'ALL' && e.level.toUpperCase() !== activeLogLevelFilter) return false;
+    if (query) {
+      return (
+        e.message.toLowerCase().includes(query) ||
+        e.category.toLowerCase().includes(query) ||
+        e.timestamp.includes(query)
+      );
+    }
+    return true;
+  });
+
+  ImGui.BeginChild('##LogWindowScroll', new ImVec2(0, 0), ImGuiChildFlags.None);
+  for (let idx = 0; idx < filtered.length; idx++) {
+    const entry = filtered[idx];
+    ImGui.PushID(`log_${entry.id}_${idx}`);
+
+    let col = new ImVec4(0.85, 0.85, 0.85, 1.0);
+    if (entry.level === 'warn') {
+      col = new ImVec4(1.0, 0.75, 0.2, 1.0);
+    } else if (entry.level === 'error') {
+      col = new ImVec4(1.0, 0.35, 0.35, 1.0);
+    }
+
+    ImGui.TextDisabled(`[${entry.timestamp}]`);
+    ImGui.SameLine();
+    ImGui.TextDisabled(`[${entry.category}]`);
+    ImGui.SameLine();
+    ImGui.TextColored(col, `[${entry.level.toUpperCase()}] ${entry.message}`);
+
+    if (ImGui.IsItemClicked()) {
+      try {
+        navigator.clipboard.writeText(`[${entry.timestamp}] [${entry.level.toUpperCase()}] [${entry.category}] ${entry.message}`);
+      } catch {}
+    }
+
+    ImGui.PopID();
+  }
+
+  if (logAutoScroll[0] && consumeUnreadLogFlag()) {
+    ImGui.SetScrollHereY(1.0);
+  }
+
+  ImGui.EndChild();
 }
 
 /**
@@ -830,7 +937,6 @@ function renderInEngineUIDesignerTab(nodes: Map<string, SceneNode>, state: Edito
         } catch {
           designerParsedNode = null;
         }
-        playSynthBeep(640, 0.03);
       }
     }
     ImGui.EndCombo();
@@ -850,7 +956,7 @@ function renderInEngineUIDesignerTab(nodes: Map<string, SceneNode>, state: Edito
         markupJson: designerJsonBuffer[0],
       });
       state.logs.unshift(`Attached JSON UI component to '${selectedNode.name}'`);
-      playSynthBeep(680, 0.04);
+      logInfo(`Attached JSON UI component to '${selectedNode.name}'`, 'UI');
     }
   }
   ImGui.EndDisabled();
@@ -868,7 +974,7 @@ function renderInEngineUIDesignerTab(nodes: Map<string, SceneNode>, state: Edito
       textContent: designerJsonBuffer[0],
     });
     state.logs.unshift('Saved JSON UI into Project Asset Manager');
-    playSynthBeep(680, 0.04);
+    logInfo('Saved JSON UI into Project Asset Manager', 'UI');
   }
 
   ImGui.Separator();
@@ -897,7 +1003,7 @@ function renderInEngineUIDesignerTab(nodes: Map<string, SceneNode>, state: Edito
       stateValues: {},
       dispatchAction: (actionId) => {
         state.logs.unshift(`UI Designer Action: ${actionId}`);
-        playSynthBeep(720, 0.03);
+        logInfo(`UI Designer Action: ${actionId}`, 'UI');
       },
     });
   } else {
@@ -951,7 +1057,6 @@ function drawComponentGalleryModal(nodes: Map<string, SceneNode>, state: EditorS
         ImGui.PushID(`g_item_${i}`);
         if (ImGui.Selectable(`[${item.category}] ${item.title}###sel_${i}`, isSelected)) {
           selectedGalleryIndex = i;
-          playSynthBeep(600, 0.02);
         }
 
         ImGui.TextDisabled(item.description);
@@ -977,7 +1082,7 @@ function drawComponentGalleryModal(nodes: Map<string, SceneNode>, state: EditorS
             const newComp = item.createDefault();
             targetNode.components.push(newComp);
             state.logs.unshift(`Added component '${item.title}' to '${targetNode.name}'`);
-            playSynthBeep(650, 0.04);
+            logInfo(`Added component '${item.title}' to '${targetNode.name}'`, 'Hierarchy');
             uiState.showComponentGallery = false;
             state.showComponentGallery = false;
           }
@@ -1037,15 +1142,17 @@ function drawImportSceneModal(
             if (importedMap.has('<root>')) {
               onResetScene(importedMap, 'Imported Scene');
               state.logs.unshift('Successfully imported scene from JSON');
+              logInfo('Successfully imported scene from JSON', 'Scene');
               uiState.showImportSceneDialog = false;
               state.showImportDialog = false;
-              playSynthBeep(680, 0.06);
             } else {
               state.logs.unshift('Import failed: missing <root> node in JSON');
+              logError('Import failed: missing <root> node in JSON', 'Scene');
             }
           }
         } catch (err: any) {
           state.logs.unshift(`JSON Parse error: ${err.message}`);
+          logError(`JSON Parse error: ${err.message}`, 'Scene');
         }
       },
     },
@@ -1103,7 +1210,7 @@ function drawDeleteConfirmModal(nodes: Map<string, SceneNode>, state: EditorStat
           deleteNodeRecursive(target.id, nodes);
           state.selectedNodeId = target.parentId;
           state.logs.unshift(`Deleted entity '${target.name}'`);
-          playSynthBeep(320, 0.05);
+          logInfo(`Deleted entity '${target.name}'`, 'Hierarchy');
           uiState.showDeleteConfirm = false;
           uiState.deleteTargetNodeId = null;
         }

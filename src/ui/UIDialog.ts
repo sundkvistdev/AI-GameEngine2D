@@ -19,7 +19,6 @@ import {
 } from '@mori2003/jsimgui';
 import type { DialogOptions } from './UIState.ts';
 import { uiState } from './UIState.ts';
-import { playSynthBeep } from '../engine/audio.ts';
 
 export function renderStandardDialog(opts: DialogOptions): void {
   const displaySize = ImGui.GetIO().DisplaySize;
@@ -105,7 +104,6 @@ export function renderStandardDialog(opts: DialogOptions): void {
       ImGui.BeginDisabled(!!opts.affirming.isDisabled);
       if (ImGui.Button(opts.affirming.label, new ImVec2(wAffirm, 24))) {
         opts.affirming.onClick();
-        playSynthBeep(640, 0.04);
       }
       ImGui.EndDisabled();
 
@@ -123,7 +121,6 @@ export function renderStandardDialog(opts: DialogOptions): void {
       ImGui.BeginDisabled(!!opts.dismissive.isDisabled);
       if (ImGui.Button(opts.dismissive.label, new ImVec2(wDismiss, 24))) {
         opts.dismissive.onClick();
-        playSynthBeep(420, 0.03);
       }
       ImGui.EndDisabled();
     }

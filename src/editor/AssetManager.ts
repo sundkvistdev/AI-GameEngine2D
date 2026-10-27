@@ -18,7 +18,8 @@ import type {
   SpriteId,
   AssetKind,
 } from '../engine/types.ts';
-import { playSynthBeep, decodeAudioBuffer, playAudioBuffer } from '../engine/audio.ts';
+import { decodeAudioBuffer, playAudioBuffer } from '../engine/audio.ts';
+import { logInfo, logWarn, logError } from '../engine/logger.ts';
 import { registerCustomImageTexture } from '../engine/textures.ts';
 import { createDefaultTransformComponent, getNodeTransform } from '../engine/math.ts';
 import { SAMPLE_UI_SCHEMAS, renderUIMarkup, type UIElementNode } from '../ui/UIMarkup.ts';
@@ -122,9 +123,10 @@ export function triggerFileUpload(
               });
               state.activeAssetId = assetId;
               state.logs.unshift(`Imported image asset: ${file.name} (${texAsset.width}x${texAsset.height})`);
-              playSynthBeep(680, 0.04);
+              logInfo(`Imported image asset: ${file.name} (${texAsset.width}x${texAsset.height})`, 'Assets');
             } catch (err: any) {
               state.logs.unshift(`Failed to register texture for ${file.name}: ${err.message}`);
+              logError(`Failed to register texture for ${file.name}: ${err.message}`, 'Assets');
             }
           };
           img.src = reader.result as string;
@@ -149,9 +151,10 @@ export function triggerFileUpload(
             });
             state.activeAssetId = assetId;
             state.logs.unshift(`Imported audio asset: ${file.name} (${audioBuf.duration.toFixed(1)}s)`);
-            playSynthBeep(720, 0.04);
+            logInfo(`Imported audio asset: ${file.name} (${audioBuf.duration.toFixed(1)}s)`, 'Assets');
           } else {
             state.logs.unshift(`Failed to decode audio file: ${file.name}`);
+            logError(`Failed to decode audio file: ${file.name}`, 'Assets');
           }
         };
         reader.readAsArrayBuffer(file);
@@ -165,11 +168,12 @@ export function triggerFileUpload(
             if (map.has('<root>')) {
               onSceneLoaded?.(map, file.name.replace(/\.[^/.]+$/, ''));
               state.logs.unshift(`Loaded scene from file: ${file.name}`);
-              playSynthBeep(640, 0.05);
+              logInfo(`Loaded scene from file: ${file.name}`, 'Scene');
             }
           }
         } catch (err: any) {
           state.logs.unshift(`Failed to parse scene JSON: ${err.message}`);
+          logError(`Failed to parse scene JSON: ${err.message}`, 'Scene');
         }
       } else if (file.name.endsWith('.ui.json')) {
         // JSON UI File
@@ -186,7 +190,7 @@ export function triggerFileUpload(
         });
         state.activeAssetId = assetId;
         state.logs.unshift(`Imported JSON UI asset: ${file.name}`);
-        playSynthBeep(600, 0.03);
+        logInfo(`Imported JSON UI asset: ${file.name}`, 'Assets');
       } else if (['js', 'ts', 'txt'].includes(ext)) {
         // Script / Text File
         const text = await file.text();
@@ -202,7 +206,7 @@ export function triggerFileUpload(
         });
         state.activeAssetId = assetId;
         state.logs.unshift(`Imported script asset: ${file.name}`);
-        playSynthBeep(600, 0.03);
+        logInfo(`Imported script asset: ${file.name}`, 'Assets');
       } else {
         // Generic JSON / Data
         const text = await file.text();
@@ -218,7 +222,7 @@ export function triggerFileUpload(
         });
         state.activeAssetId = assetId;
         state.logs.unshift(`Imported file asset: ${file.name}`);
-        playSynthBeep(600, 0.03);
+        logInfo(`Imported file asset: ${file.name}`, 'Assets');
       }
     }
   };
@@ -282,7 +286,7 @@ export function renderAssetManagerUI(
   if (ImGui.Button('Save Scene (.vortex.json)')) {
     exportSceneToFile(nodes, state.activePresetName || 'MyScene');
     state.logs.unshift('Exported scene to .vortex.json');
-    playSynthBeep(700, 0.04);
+    logInfo('Exported scene to .vortex.json', 'Scene');
   }
   ImGui.SameLine();
 
@@ -305,7 +309,7 @@ export function renderAssetManagerUI(
     projectAssets.set(assetId, newScript);
     state.activeAssetId = assetId;
     state.logs.unshift(`Created new script asset: ${newScript.name}`);
-    playSynthBeep(620, 0.03);
+    logInfo(`Created new script asset: ${newScript.name}`, 'Assets');
   }
   ImGui.SameLine();
 
@@ -323,7 +327,7 @@ export function renderAssetManagerUI(
     projectAssets.set(assetId, newUI);
     state.activeAssetId = assetId;
     state.logs.unshift(`Created new JSON UI asset: ${newUI.name}`);
-    playSynthBeep(620, 0.03);
+    logInfo(`Created new JSON UI asset: ${newUI.name}`, 'Assets');
   }
   ImGui.SameLine();
 
@@ -346,7 +350,7 @@ export function renderAssetManagerUI(
       projectAssets.set(prefabId, newPrefab);
       state.activeAssetId = prefabId;
       state.logs.unshift(`Saved prefab '${newPrefab.name}' from entity '${selectedNode.name}'`);
-      playSynthBeep(640, 0.04);
+      logInfo(`Saved prefab '${newPrefab.name}' from entity '${selectedNode.name}'`, 'Assets');
     }
   }
   ImGui.EndDisabled();
@@ -409,7 +413,6 @@ export function renderAssetManagerUI(
     const label = `[${asset.kind.toUpperCase()}] ${asset.name} (${formatBytes(asset.sizeBytes)})###asset_${asset.id}`;
     if (ImGui.Selectable(label, isSelected)) {
       state.activeAssetId = asset.id;
-      playSynthBeep(600, 0.02);
     }
   }
   ImGui.EndChild();
@@ -442,7 +445,7 @@ export function renderAssetManagerUI(
         if (spriteComp && spriteComp.type === 'SpriteRenderer') {
           spriteComp.spriteId = tex.id;
           state.logs.unshift(`Assigned '${curAsset.name}' to '${selectedEntity!.name}'`);
-          playSynthBeep(640, 0.04);
+          logInfo(`Assigned '${curAsset.name}' to '${selectedEntity!.name}'`, 'Assets');
         }
       }
       ImGui.EndDisabled();
@@ -482,7 +485,7 @@ export function renderAssetManagerUI(
         parentNode.children.push(newId);
         state.selectedNodeId = newId;
         state.logs.unshift(`Spawned entity '${newNode.name}' with sprite '${curAsset.name}'`);
-        playSynthBeep(660, 0.04);
+        logInfo(`Spawned entity '${newNode.name}' with sprite '${curAsset.name}'`, 'Hierarchy');
       }
       ImGui.EndGroup();
     } else if (curAsset.kind === 'audio' && curAsset.audioBuffer) {
@@ -508,7 +511,7 @@ export function renderAssetManagerUI(
             lastError: null,
           });
           state.logs.unshift(`Attached script '${curAsset.name}' to '${target.name}'`);
-          playSynthBeep(640, 0.04);
+          logInfo(`Attached script '${curAsset.name}' to '${target.name}'`, 'Assets');
         }
       }
       ImGui.EndDisabled();
@@ -527,7 +530,7 @@ export function renderAssetManagerUI(
             markupJson: curAsset.textContent,
           });
           state.logs.unshift(`Attached JSON UI '${curAsset.name}' to '${target.name}'`);
-          playSynthBeep(640, 0.04);
+          logInfo(`Attached JSON UI '${curAsset.name}' to '${target.name}'`, 'Assets');
         }
       }
       ImGui.EndDisabled();
@@ -558,7 +561,7 @@ export function renderAssetManagerUI(
         parentNode.children.push(newId);
         state.selectedNodeId = newId;
         state.logs.unshift(`Instantiated prefab '${curAsset.name}' as '${instantiated.name}'`);
-        playSynthBeep(660, 0.04);
+        logInfo(`Instantiated prefab '${curAsset.name}' as '${instantiated.name}'`, 'Assets');
       }
     }
 
@@ -566,6 +569,7 @@ export function renderAssetManagerUI(
     if (ImGui.SmallButton('Export Asset File')) {
       exportAssetToFile(curAsset);
       state.logs.unshift(`Exported asset file '${curAsset.name}'`);
+      logInfo(`Exported asset file '${curAsset.name}'`, 'Assets');
     }
     ImGui.SameLine();
 
@@ -574,8 +578,8 @@ export function renderAssetManagerUI(
     if (ImGui.SmallButton('Delete Asset')) {
       projectAssets.delete(curAsset.id);
       state.logs.unshift(`Deleted asset '${curAsset.name}'`);
+      logInfo(`Deleted asset '${curAsset.name}'`, 'Assets');
       state.activeAssetId = null;
-      playSynthBeep(320, 0.04);
     }
     ImGui.EndDisabled();
   }

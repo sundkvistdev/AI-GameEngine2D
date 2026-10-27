@@ -19,28 +19,8 @@ export function getAudioContext(): AudioContext | null {
   return audioCtx;
 }
 
-export function playSynthBeep(freq: number = 440, duration: number = 0.08, type: OscillatorType = 'sine'): void {
-  try {
-    const ctx = getAudioContext();
-    if (!ctx) return;
-
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, ctx.currentTime);
-
-    gain.gain.setValueAtTime(0.12, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-
-    osc.start();
-    osc.stop(ctx.currentTime + duration);
-  } catch {
-    // Ignore audio autoplay restrictions
-  }
+export function playSynthBeep(_freq: number = 440, _duration: number = 0.08, _type: OscillatorType = 'sine'): void {
+  // UI interaction sound effects disabled per specification.
 }
 
 export async function decodeAudioBuffer(arrayBuffer: ArrayBuffer): Promise<AudioBuffer | null> {

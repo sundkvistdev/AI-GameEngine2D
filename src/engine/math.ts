@@ -12,6 +12,7 @@ import type {
   ScriptComponent,
   ScriptContext,
 } from './types.ts';
+import { logInfo, logError } from './logger.ts';
 
 // Global keyboard tracking for script components
 export const activeKeyboardKeys = new Set<string>();
@@ -212,7 +213,9 @@ export function compileScript(sourceCode: string): {
         try {
           wrapper(node, dt, time, context);
         } catch (runtimeErr: any) {
-          console.warn(`Script runtime error in '${node.name}':`, runtimeErr.message);
+          const errMsg = `Script runtime error in '${node.name}': ${runtimeErr.message || runtimeErr}`;
+          console.warn(errMsg);
+          logError(errMsg, 'Script');
         }
       },
     };
@@ -282,7 +285,9 @@ export function updateSceneMatrices(
       }
       nodes.delete(id);
     },
-    log: (msg: string) => console.log(`[ScriptLog] ${msg}`),
+    log: (msg: string) => {
+      logInfo(msg, 'Script');
+    },
   };
 
   function traverse(nodeId: string, parentWorldMatrix: Matrix3x3, parentOpacity: number) {
